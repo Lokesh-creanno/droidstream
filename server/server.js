@@ -42,13 +42,19 @@ async function pickDevice() {
   return serial;
 }
 
+// Take the size from a real capture. `wm size` reports the physical size and never flips
+// with rotation, which would put every tap in the wrong place in landscape.
 async function getSize() {
   if (size) return size;
+  try {
+    const png = await run(['exec-out', 'screencap', '-p'], { binary: true });
+    if (png.length > 24 && png.readUInt32BE(12) === 0x49484452)   // 'IHDR'
+      return (size = { w: png.readUInt32BE(16), h: png.readUInt32BE(20) });
+  } catch { /* fall through to wm size */ }
   const out = await run(['shell', 'wm', 'size']);
   const m = out.match(/Override size:\s*(\d+)x(\d+)/) || out.match(/Physical size:\s*(\d+)x(\d+)/);
   if (!m) throw new Error('cannot read screen size: ' + out);
-  size = { w: +m[1], h: +m[2] };
-  return size;
+  return (size = { w: +m[1], h: +m[2] });
 }
 
 // ---- MJPEG broadcast ----
@@ -133,6 +139,29 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (url.pathname === '/screenshot') {
+      if (!await pickDevice()) return json(res, 409, { error: 'no device' });
+      const png = await run(['exec-out', 'screencap', '-p'], { binary: true });
+      const name = 'droidstream-' + new Date().toISOString().replace(/[:.]/g, '-') + '.png';
+      const dir = path.join(process.cwd(), 'screenshots');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, name), png);
+      if (url.searchParams.get('download')) {
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Disposition': 'attachment; filename=' + name });
+        return res.end(png);
+      }
+      return json(res, 200, { saved: path.join(dir, name) });
+    }
+    if (url.pathname === '/rotate' && req.method === 'POST') {
+      if (!await pickDevice()) return json(res, 409, { error: 'no device' });
+      const cur = parseInt((await run(['shell', 'settings', 'get', 'system', 'user_rotation'])).trim(), 10) || 0;
+      const next = (cur + 1) % 4;
+      await run(['shell', 'settings', 'put', 'system', 'accelerometer_rotation', '0']);
+      await run(['shell', 'settings', 'put', 'system', 'user_rotation', String(next)]);
+      size = null;                       // wm size flips with the rotation
+      await new Promise(r => setTimeout(r, 700));
+      return json(res, 200, { rotation: next, size: await getSize() });
+    }
     if (url.pathname === '/install' && req.method === 'POST') {
       if (!await pickDevice()) return json(res, 409, { error: 'no device' });
       const chunks = [];
@@ -142,8 +171,8 @@ const server = http.createServer(async (req, res) => {
       try {
         const out = await run(['install', '-r', '-t', apk]);
         const pkg = await pkgOf(apk);
-        if (pkg) await run(['shell', 'monkey', '-p', pkg, '-c', 'android.intent.category.LAUNCHER', '1']);
-        return json(res, 200, { ok: /Success/i.test(out), pkg, out: out.trim() });
+        const launched = pkg ? await launch(pkg) : false;
+        return json(res, 200, { ok: /Success/i.test(out), pkg, launched, out: out.trim() });
       } finally { fs.unlinkSync(apk); }
     }
     if (url.pathname === '/info') {
@@ -180,6 +209,19 @@ const server = http.createServer(async (req, res) => {
     json(res, 500, { error: String(e.message || e) });
   }
 });
+
+// monkey sometimes fires before the package is ready - confirm it reached the foreground.
+async function launch(pkg, tries = 3) {
+  for (let i = 0; i < tries; i++) {
+    try { await run(['shell', 'monkey', '-p', pkg, '-c', 'android.intent.category.LAUNCHER', '1']); } catch {}
+    for (let t = 0; t < 10; t++) {
+      await new Promise(r => setTimeout(r, 500));
+      const out = await run(['shell', 'dumpsys', 'activity', 'activities']).catch(() => '');
+      if (new RegExp('topResumedActivity.*' + pkg.replace(/./g, '\.')).test(out)) return true;
+    }
+  }
+  return false;
+}
 
 async function pkgOf(apk) {
   const aapt = fs.readdirSync(path.join(SDK, 'build-tools')).sort().pop();

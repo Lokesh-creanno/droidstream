@@ -14,6 +14,7 @@ through it, and see what happened. It works as a plain web app too.
   (~15-25 fps under motion). Falls back to a ~1 fps MJPEG stream where WebCodecs is missing.
 - **Full input** — click to tap, drag to swipe, type to type, buttons for Back / Home / Recents.
 - **Drop an APK on the page** — installs with `adb install -r` and launches it.
+- **Rotate and screenshot** buttons; screenshots land in ./screenshots.
 - **Boot an emulator** from the AVD dropdown when nothing is attached.
 - **HTTP API** so a script or an AI agent can drive the device without a browser.
 
@@ -28,7 +29,7 @@ No npm install. No native modules. One Node file plus one HTML file.
 ## Run it
 
 ```bash
-git clone https://github.com/USER/droidstream
+git clone https://github.com/Lokesh-creanno/droidstream
 node droidstream/server/server.js
 # open http://localhost:8787
 ```
@@ -58,6 +59,8 @@ Coordinates are device pixels; read the screen size from `/info`.
 | `POST /input` `{type:"swipe",x1,y1,x2,y2,ms}` | swipe |
 | `POST /input` `{type:"text",text}` | type text |
 | `POST /input` `{type:"key",key:"KEYCODE_BACK"}` | key event |
+| `POST /rotate` | rotate the screen 90 degrees |
+| `GET /screenshot` | save a PNG to ./screenshots (add `?download=1` to download it) |
 | `POST /install` (raw APK body) | install and launch |
 | `GET /video` | raw H.264 Annex-B stream |
 | `GET /stream` | MJPEG fallback |

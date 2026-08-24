@@ -37,6 +37,7 @@ For a repeatable launch, add this to the project's `.claude/launch.json`:
 
 Click = tap. Drag = swipe. Typing = text. Side buttons = Back / Home / Recents / Enter / Backspace.
 Drag an `.apk` file onto the page to install and launch it.
+Rotate and Screenshot buttons sit under **Screen**; screenshots are written to `./screenshots`.
 The "Start AVD" dropdown boots an emulator if none is running.
 
 ## Drive it from Claude (HTTP API)
@@ -53,6 +54,8 @@ Coordinates are **device pixels** (get them from `/info`).
 | `POST /input` `{type:"swipe",x1,y1,x2,y2,ms}` | swipe / scroll |
 | `POST /input` `{type:"text","..."}` | type text |
 | `POST /input` `{type:"key",key:"KEYCODE_BACK"}` | key event |
+| `POST /rotate` | rotate the screen 90 degrees |
+| `GET /screenshot` | save a PNG to ./screenshots (add `?download=1` to download it) |
 | `POST /install` (raw APK body) | install `-r` and launch |
 | `GET /video` | raw H.264 Annex-B stream |
 | `GET /stream` | MJPEG fallback |

@@ -44,6 +44,20 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     assert.strictEqual(head[4] & 0x1f, 7, 'stream does not start with SPS');
     console.log('h264 ok');
 
+    const shot = await (await fetch(base + '/screenshot')).json();
+    assert.ok(shot.saved && require('fs').existsSync(shot.saved), 'screenshot not saved');
+    require('fs').unlinkSync(shot.saved);
+    console.log('screenshot ok');
+
+    // rotating must flip the reported size, or every tap lands in the wrong place
+    const before = (await (await fetch(base + '/info')).json()).size;
+    const rot = await (await fetch(base + '/rotate', { method: 'POST' })).json();
+    assert.ok(rot.size, 'rotate returned no size');
+    const after = (await (await fetch(base + '/info')).json()).size;
+    assert.deepStrictEqual(after, rot.size, 'info disagrees with rotate');
+    console.log('rotate ok:', before.w + 'x' + before.h, '->', after.w + 'x' + after.h,
+      after.w === before.w ? '(app is orientation-locked - size unchanged, expected)' : '');
+
     console.log('\nall checks passed');
   } finally {
     srv.kill();

@@ -1,0 +1,9 @@
+{
+  "name": "droidstream",
+  "version": "0.1.0",
+  "description": "Stream an Android device or emulator into any web page (Appetize.io-style) and drive it from the Claude browser pane. Zero dependencies, local-only.",
+  "author": { "name": "Lokesh", "email": "lokesh@creanno.com" },
+  "repository": "https://github.com/PLACEHOLDER/droidstream",
+  "license": "MIT",
+  "keywords": ["android", "emulator", "adb", "device-streaming", "mobile-testing", "apk", "appetize"]
+}

@@ -1,0 +1,192 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>droidstream</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; background:#111; color:#ddd; font:14px system-ui; display:flex; height:100vh; }
+  #left { flex:1; min-width:0; display:flex; align-items:center; justify-content:center; padding:12px; }
+  #screen { height:96vh; width:auto; object-fit:contain; background:#000; border-radius:14px;
+            box-shadow:0 0 0 6px #222; cursor:crosshair; touch-action:none; }
+  #side { width:210px; padding:12px; border-left:1px solid #333; display:flex; flex-direction:column; gap:8px; overflow:auto; }
+  button, select, input { background:#222; color:#ddd; border:1px solid #444; border-radius:6px; padding:7px; font:13px system-ui; }
+  button:hover { background:#2c2c2c; }
+  #status { font-size:12px; color:#8a8; min-height:2.4em; white-space:pre-wrap; }
+  h3 { margin:6px 0 0; font-size:12px; color:#888; text-transform:uppercase; letter-spacing:.06em; }
+</style>
+<div id="left"><canvas id="screen"></canvas></div>
+<div id="side">
+  <h3>Device</h3>
+  <select id="devsel"></select>
+  <button id="refresh">Refresh</button>
+  <h3>Boot emulator</h3>
+  <select id="avdsel"></select>
+  <button id="boot">Start AVD</button>
+  <h3>Keys</h3>
+  <button data-key="KEYCODE_BACK">Back</button>
+  <button data-key="KEYCODE_HOME">Home</button>
+  <button data-key="KEYCODE_APP_SWITCH">Recents</button>
+  <button data-key="KEYCODE_ENTER">Enter</button>
+  <button data-key="KEYCODE_DEL">Backspace</button>
+  <h3>Type text</h3>
+  <input id="txt" placeholder="text then Enter">
+  <div id="status">connecting...</div>
+  <div style="font-size:11px;color:#666">drop an .apk here to install + launch</div>
+</div>
+<script>
+const cv = document.getElementById('screen'), ctx = cv.getContext('2d'), statusEl = document.getElementById('status');
+let dev = null, size = null, surface = cv;
+
+const post = (p, b) => fetch(p, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)});
+const say = m => statusEl.textContent = m;
+
+async function info() {
+  const r = await (await fetch('/info')).json();
+  dev = r.device; size = r.size || null;
+  const ds = document.getElementById('devsel');
+  ds.innerHTML = (r.devices || []).map(d => '<option' + (d === dev ? ' selected' : '') + '>' + d + '</option>').join('')
+    || '<option>no device</option>';
+  const as = document.getElementById('avdsel');
+  if (r.avds && r.avds.length) as.innerHTML = r.avds.map(a => '<option>' + a + '</option>').join('');
+  say(dev ? dev + '  ' + size.w + 'x' + size.h : 'no device. start an AVD.');
+  return dev;
+}
+
+// ---- H.264 (Annex-B) -> WebCodecs -> canvas. No deps, no muxing. ----
+// screenrecord emits one slice NAL per frame, so each VCL NAL closes an access unit.
+const nalType = b => b & 0x1f;
+const isVcl = n => nalType(n[4]) === 1 || nalType(n[4]) === 5;
+
+async function playVideo() {
+  const res = await fetch('/video');
+  if (!res.ok) throw new Error('video ' + res.status);
+  const reader = res.body.getReader();
+  let decoder = null, pending = [], buf = new Uint8Array(0), tsUs = 0, frames = 0;
+
+  setInterval(() => {
+    if (dev) say(dev + '  ' + size.w + 'x' + size.h + '  ' + (frames ? frames + ' fps' : 'idle'));
+    frames = 0;
+  }, 1000);
+
+  const configure = sps => {
+    const codec = 'avc1.' + Array.from(sps.slice(1, 4)).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    decoder = new VideoDecoder({
+      output: f => {
+        if (cv.width !== f.displayWidth) { cv.width = f.displayWidth; cv.height = f.displayHeight; }
+        ctx.drawImage(f, 0, 0); f.close(); frames++;
+      },
+      error: e => say('decoder: ' + e.message),
+    });
+    decoder.configure({ codec, optimizeForLatency: true });
+  };
+
+  const flushAU = () => {
+    if (!pending.length) return;
+    const key = pending.some(n => nalType(n[4]) === 5 || nalType(n[4]) === 7);
+    const total = pending.reduce((a, n) => a + n.length, 0);
+    const data = new Uint8Array(total);
+    let o = 0;
+    for (const n of pending) { data.set(n, o); o += n.length; }
+    pending = [];
+    if (!decoder || (!key && tsUs === 0)) return;   // wait for the first keyframe
+    tsUs += 16666;
+    try { decoder.decode(new EncodedVideoChunk({ type: key ? 'key' : 'delta', timestamp: tsUs, data })); }
+    catch (e) { say('decode: ' + e.message); }
+  };
+
+  const findStart = (a, from) => {
+    for (let i = from; i + 3 < a.length; i++)
+      if (a[i] === 0 && a[i + 1] === 0 && a[i + 2] === 0 && a[i + 3] === 1) return i;
+    return -1;
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    const merged = new Uint8Array(buf.length + value.length);
+    merged.set(buf); merged.set(value, buf.length); buf = merged;
+
+    let start = findStart(buf, 0), last = start;
+    while (start >= 0) {
+      const next = findStart(buf, start + 4);
+      if (next < 0) break;
+      const nal = buf.subarray(start, next);
+      const t = nalType(nal[4]);
+      if (t === 7 && !decoder) configure(nal.subarray(4));
+      if (isVcl(nal) && pending.some(isVcl)) flushAU();
+      pending.push(nal.slice());
+      if (isVcl(nal)) flushAU();
+      start = next; last = next;
+    }
+    buf = last >= 0 ? buf.slice(last) : new Uint8Array(0);
+  }
+}
+
+// ---- fallback: MJPEG <img> ----
+function playMjpeg() {
+  const img = new Image();
+  img.id = 'screen'; img.src = '/stream?t=' + Date.now();
+  cv.replaceWith(img);
+  say((dev || '') + ' (MJPEG fallback, ~1 fps)');
+  return img;
+}
+
+async function connect() {
+  if (!await info()) return;
+  if (!window.VideoDecoder) { surface = playMjpeg(); return; }
+  try { await playVideo(); }
+  catch (e) { say('video failed: ' + e.message); surface = playMjpeg(); }
+}
+
+// ---- input ----
+function toDevice(e) {
+  const r = surface.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * size.w, y: (e.clientY - r.top) / r.height * size.h };
+}
+let down = null, downTime = 0;
+document.addEventListener('pointerdown', e => {
+  if (!size || e.target !== surface) return;
+  down = toDevice(e); downTime = Date.now();
+});
+document.addEventListener('pointerup', e => {
+  if (!down || !size) return;
+  const up = toDevice(e), ms = Date.now() - downTime;
+  const far = Math.hypot(up.x - down.x, up.y - down.y) > 12;
+  if (far || ms > 400)
+    post('/input', {type:'swipe', x1:down.x, y1:down.y, x2:up.x, y2:up.y, ms: Math.max(60, Math.min(ms, 1200))});
+  else
+    post('/input', {type:'tap', x:down.x, y:down.y});
+  down = null;
+});
+
+document.querySelectorAll('[data-key]').forEach(b =>
+  b.onclick = () => post('/input', {type:'key', key:b.dataset.key}));
+document.getElementById('txt').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  post('/input', {type:'text', text:e.target.value}); e.target.value = '';
+});
+window.addEventListener('keydown', e => {
+  if (document.activeElement.tagName === 'INPUT') return;
+  if (e.key.length === 1) post('/input', {type:'text', text:e.key});
+  else if (e.key === 'Backspace') post('/input', {type:'key', key:'KEYCODE_DEL'});
+  else if (e.key === 'Enter') post('/input', {type:'key', key:'KEYCODE_ENTER'});
+});
+document.getElementById('refresh').onclick = () => location.reload();
+document.getElementById('devsel').onchange = e => post('/select', {serial:e.target.value}).then(() => location.reload());
+document.getElementById('boot').onclick = async () => {
+  const avd = document.getElementById('avdsel').value;
+  await post('/boot', {avd}); say('booting ' + avd + ' ... ~40s');
+  const t = setInterval(async () => { if (await info()) { clearInterval(t); location.reload(); } }, 5000);
+};
+// drag an APK anywhere on the page to install + launch it
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', async e => {
+  e.preventDefault();
+  const f = e.dataTransfer.files[0];
+  if (!f || !/.apk$/i.test(f.name)) return;
+  say('installing ' + f.name + ' ...');
+  const r = await (await fetch('/install', { method: 'POST', body: f })).json();
+  say(r.ok ? 'installed + launched ' + (r.pkg || f.name) : 'install failed: ' + (r.out || r.error));
+});
+
+connect();
+</script>

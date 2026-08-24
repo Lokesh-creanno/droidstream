@@ -177,8 +177,11 @@ const server = http.createServer(async (req, res) => {
       try {
         const out = await run(['install', '-r', '-t', apk]);
         const pkg = await pkgOf(apk);
+        // A dev build reaches its bundler over `adb reverse`. `expo start` and `npm run dev`
+        // never set that up, so the app hangs on its splash screen with no error.
+        const reversed = await autoReverse();
         const launched = pkg ? await launch(pkg) : false;
-        return json(res, 200, { ok: /Success/i.test(out), pkg, launched, out: out.trim() });
+        return json(res, 200, { ok: /Success/i.test(out), pkg, launched, reversed, out: out.trim() });
       } finally { fs.unlinkSync(apk); }
     }
     if (url.pathname === '/info') {
@@ -199,10 +202,22 @@ const server = http.createServer(async (req, res) => {
       const b = await body(req);
       const avd = (b.avd || '').replace(/[^\w.-]/g, '');
       if (!avd) return json(res, 400, { error: 'avd required' });
-      const child = require('child_process').spawn(EMULATOR, ['-avd', avd, '-netdelay', 'none', '-netspeed', 'full'],
-        { detached: true, stdio: 'ignore' });
+      // Warm boot by default: a snapshot start is roughly 3x faster than a cold one.
+      const args = ['-avd', avd, '-netdelay', 'none', '-netspeed', 'full'];
+      if (b.cold) args.push('-no-snapshot-load');
+      const child = require('child_process').spawn(EMULATOR, args, { detached: true, stdio: 'ignore' });
       child.unref();
-      return json(res, 200, { booting: avd });
+      return json(res, 200, { booting: avd, cold: !!b.cold });
+    }
+    if (url.pathname === '/reverse' && req.method === 'POST') {
+      if (!await pickDevice()) return json(res, 409, { error: 'no device' });
+      const b = await body(req);
+      const ports = (b.ports || (b.port ? [b.port] : DEV_PORTS)).map(Number).filter(p => p > 0 && p < 65536);
+      const done = [];
+      for (const p of ports) {
+        try { await run(['reverse', `tcp:${p}`, `tcp:${p}`]); done.push(p); } catch { /* port in use elsewhere */ }
+      }
+      return json(res, 200, { reversed: done });
     }
     // static
     const f = path.join(PUBLIC, url.pathname === '/' ? 'index.html' : url.pathname.slice(1));
@@ -215,6 +230,28 @@ const server = http.createServer(async (req, res) => {
     json(res, 500, { error: String(e.message || e) });
   }
 });
+
+// Bundler and dev-server ports a debug build is likely to want back on the host.
+const DEV_PORTS = [8081, 19000, 19001, 8097, 5173, 3000];
+
+const listening = port => new Promise(resolve => {
+  const s = require('net').connect({ host: '127.0.0.1', port });
+  const done = ok => { s.destroy(); resolve(ok); };
+  s.setTimeout(300);
+  s.once('connect', () => done(true));
+  s.once('timeout', () => done(false));
+  s.once('error', () => done(false));
+});
+
+// Only tunnel ports something is actually serving on, so this stays a no-op for release builds.
+async function autoReverse() {
+  const done = [];
+  for (const p of DEV_PORTS) {
+    if (!await listening(p)) continue;
+    try { await run(['reverse', `tcp:${p}`, `tcp:${p}`]); done.push(p); } catch { /* ignore */ }
+  }
+  return done;
+}
 
 // monkey sometimes fires before the package is ready - confirm it reached the foreground.
 async function launch(pkg, tries = 3) {

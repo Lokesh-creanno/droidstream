@@ -1,10 +1,11 @@
 // Smoke test: needs an Android device/emulator attached. Run: node test.js
 const assert = require('assert');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 const path = require('path');
 
 const PORT = 8799;
 const base = `http://localhost:${PORT}`;
+const ADB = process.env.ADB || path.join(process.env.LOCALAPPDATA || '', 'Android', 'Sdk', 'platform-tools', 'adb.exe');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 (async () => {
@@ -57,6 +58,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     assert.deepStrictEqual(after, rot.size, 'info disagrees with rotate');
     console.log('rotate ok:', before.w + 'x' + before.h, '->', after.w + 'x' + after.h,
       after.w === before.w ? '(app is orientation-locked - size unchanged, expected)' : '');
+
+    // a dev build is dead without this tunnel, so prove the endpoint really sets it
+    const rev = await (await fetch(base + '/reverse', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ports: [8081] }),
+    })).json();
+    assert.deepStrictEqual(rev.reversed, [8081], 'reverse did not report the port');
+    const list = execFileSync(ADB, ['reverse', '--list'], { encoding: 'utf8' });
+    assert.ok(list.includes('tcp:8081'), 'adb has no reverse for 8081');
+    console.log('reverse ok');
 
     console.log('\nall checks passed');
   } finally {

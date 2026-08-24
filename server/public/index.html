@@ -29,6 +29,8 @@
   <h3>Screen</h3>
   <button id="rotate">Rotate</button>
   <button id="shot">Screenshot</button>
+  <h3>Dev server</h3>
+  <button id="tunnel">Tunnel bundler ports</button>
   <h3>Keys</h3>
   <button data-key="KEYCODE_BACK">Back</button>
   <button data-key="KEYCODE_HOME">Home</button>
@@ -199,6 +201,10 @@ window.addEventListener('keydown', e => {
   else if (e.key === 'Enter') post('/input', {type:'key', key:'KEYCODE_ENTER'});
 });
 document.getElementById('refresh').onclick = () => location.reload();
+document.getElementById('tunnel').onclick = async () => {
+  const r = await (await post('/reverse', {})).json();
+  say(r.reversed && r.reversed.length ? 'tunnelled ' + r.reversed.join(', ') : 'nothing to tunnel');
+};
 document.getElementById('rotate').onclick = async () => {
   say('rotating...');
   const r = await (await post('/rotate', {})).json();
@@ -231,7 +237,8 @@ document.addEventListener('drop', async e => {
 async function install(blob, name) {
   say('installing ' + name + ' ...');
   const r = await (await fetch('/install', { method: 'POST', body: blob })).json();
-  say(r.ok ? 'installed + launched ' + (r.pkg || name) : 'install failed: ' + (r.out || r.error));
+  const tun = r.reversed && r.reversed.length ? '  (tunnel ' + r.reversed.join(', ') + ')' : '';
+  say(r.ok ? 'installed + launched ' + (r.pkg || name) + tun : 'install failed: ' + (r.out || r.error));
 }
 
 connect();

@@ -49,7 +49,8 @@ Coordinates are **device pixels** (get them from `/info`).
 |---|---|
 | `GET /info` | current device, screen size, device list, AVD list |
 | `POST /select` `{serial}` | choose a device |
-| `POST /boot` `{avd}` | start an emulator |
+| `POST /boot` `{avd}` | start an emulator (warm; `{cold:true}` forces a cold boot) |
+| `POST /reverse` `{ports}` | `adb reverse` bundler ports back to the host |
 | `POST /input` `{type:"tap",x,y}` | tap |
 | `POST /input` `{type:"swipe",x1,y1,x2,y2,ms}` | swipe / scroll |
 | `POST /input` `{type:"text","..."}` | type text |
@@ -84,6 +85,12 @@ normal, not a stall. Under motion expect ~15-25 fps.
 - **Black canvas** — the WebCodecs decoder never got a keyframe; reload the page.
 - **Taps land in the wrong place** — the page maps clicks with the size from `/info`; reload after a rotation.
 - **Install fails with `INSTALL_FAILED_*`** — the raw adb output is returned in the response.
+- **A dev build hangs on its splash screen, no error** — the bundler is not reachable. `expo start`
+  and `npm run dev` do not create the `adb reverse` tunnel; only `expo run:android` does. Install
+  through droidstream (it tunnels the live bundler ports automatically) or `POST /reverse {"ports":[8081]}`.
+- **The emulator is painfully slow** — something is cold-booting it. `-no-snapshot-load` (and
+  `{cold:true}` on `/boot`) rebuilds the system image every launch; a warm boot is roughly 3x faster.
+  On the AVD itself, set Quick Boot, 6 CPU cores and `hw.gpu.mode=host`.
 
 ## Known limits
 

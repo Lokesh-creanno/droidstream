@@ -29,6 +29,18 @@ status line tells you the package that came up. No `adb` command, no file picker
 
 ![install demo](docs/install.gif)
 
+## Dev builds: the bundler tunnel
+
+A debug build of a React Native, Expo, or Vite app loads its JavaScript from a bundler on your
+machine. The device reaches it through `adb reverse`. **`expo start` and `npm run dev` never set
+that up** — only `expo run:android` does — so the app sits on its splash screen with no error and
+nothing in the log to explain it.
+
+droidstream handles it: after every APK install it checks which bundler ports are actually serving
+(`8081`, `19000`, `19001`, `8097`, `5173`, `3000`) and tunnels only those. The status line says
+`(tunnel 8081)` when it did. There is a **Tunnel bundler ports** button for the times you started
+the bundler after the app, and `POST /reverse {"ports":[8081]}` to do it from a script.
+
 ## Requirements
 
 - Android SDK — `platform-tools` (adb) and, for emulators, `emulator`
@@ -63,7 +75,8 @@ Coordinates are device pixels; read the screen size from `/info`.
 |---|---|
 | `GET /info` | device, screen size, device list, AVD list |
 | `POST /select` `{serial}` | choose a device |
-| `POST /boot` `{avd}` | start an emulator |
+| `POST /boot` `{avd}` | start an emulator (warm; `{cold:true}` forces a cold boot) |
+| `POST /reverse` `{ports}` | `adb reverse` bundler ports back to the host |
 | `POST /input` `{type:"tap",x,y}` | tap |
 | `POST /input` `{type:"swipe",x1,y1,x2,y2,ms}` | swipe |
 | `POST /input` `{type:"text",text}` | type text |
@@ -88,6 +101,20 @@ chunked HTTP. The page splits NAL units, groups each slice into an access unit, 
 
 `screenrecord` stops after 180 s, so the server relaunches it while a client is connected. The
 encoder emits nothing while the screen is still — the status line reads `idle`, which is normal.
+
+## Making the emulator fast
+
+`POST /boot` and the **Start AVD** button do a warm (snapshot) boot. Do not pass
+`-no-snapshot-load` unless you want a cold boot — that flag is the single most common reason an
+emulator feels unusably slow, because it rebuilds the whole system image every launch.
+
+Worth setting once on the AVD itself, in Android Studio's Device Manager:
+
+- **Quick Boot** enabled (not Cold Boot)
+- **6 CPU cores**
+- **Graphics: Hardware — GLES 2.0** (`hw.gpu.mode=host`)
+
+On a tuned Pixel 6 AVD that is roughly **94 s cold versus 33 s warm**.
 
 ## Limits
 

@@ -1,12 +1,14 @@
 # droidstream
 
-Stream an Android device or emulator into a web page and drive it with your mouse and keyboard —
-a small, local, zero-dependency take on [Appetize.io](https://appetize.io).
+**Stream an Android device into your browser — and let an AI drive it.**
 
-Built to run an app inside the **Claude Code browser pane**, so an agent can open a build, tap
-through it, and see what happened. It works as a plain web app too.
+A local, zero-dependency take on the idea behind [Appetize.io](https://appetize.io): your phone or
+emulator, live in a web page, tapped and typed by you or by a coding agent. Runs entirely on your
+own machine. Ships as a [Claude Code](https://claude.com/claude-code) plugin too.
 
-![status](https://img.shields.io/badge/android-working-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue)
+![demo](docs/demo.gif)
+
+![status](https://img.shields.io/badge/android-working-brightgreen) ![deps](https://img.shields.io/badge/dependencies-0-blue) ![license](https://img.shields.io/badge/license-MIT-blue)
 
 ## What it does
 

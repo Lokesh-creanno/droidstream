@@ -50,6 +50,7 @@ async function info() {
     || '<option>no device</option>';
   const as = document.getElementById('avdsel');
   if (r.avds && r.avds.length) as.innerHTML = r.avds.map(a => '<option>' + a + '</option>').join('');
+  if (size) { cv.width = size.w; cv.height = size.h; }   // right aspect before the first frame
   say(dev ? dev + '  ' + size.w + 'x' + size.h : 'no device. start an AVD.');
   return dev;
 }

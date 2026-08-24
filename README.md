@@ -41,7 +41,7 @@ Environment: `PORT` (default `8787`), `ADB`, `ANDROID_SDK_ROOT`, `ANDROID_SERIAL
 This repo is also a Claude Code plugin — a `droidstream` skill plus a `/droidstream` command.
 
 ```
-/plugin install USER/droidstream
+/plugin install Lokesh-creanno/droidstream
 ```
 
 Then just ask: *"open my app on the emulator"*, *"install this APK and tap Sign in"*.

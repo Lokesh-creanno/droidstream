@@ -15,12 +15,19 @@ own machine. Ships as a [Claude Code](https://claude.com/claude-code) plugin too
 - **Live screen** — H.264 via `adb exec-out screenrecord`, decoded in the browser with WebCodecs
   (~15-25 fps under motion). Falls back to a ~1 fps MJPEG stream where WebCodecs is missing.
 - **Full input** — click to tap, drag to swipe, type to type, buttons for Back / Home / Recents.
-- **Drop an APK on the page** — installs with `adb install -r` and launches it.
+- **Drop an APK on the page** — installs with `adb install -r`, launches it, and confirms it reached the foreground.
 - **Rotate and screenshot** buttons; screenshots land in ./screenshots.
 - **Boot an emulator** from the AVD dropdown when nothing is attached.
 - **HTTP API** so a script or an AI agent can drive the device without a browser.
 
 No npm install. No native modules. One Node file plus one HTML file.
+
+## Drag an APK onto the page
+
+Drop a build anywhere on the window. It uploads, installs with `adb install -r`, launches, and the
+status line tells you the package that came up. No `adb` command, no file picker, no terminal.
+
+![install demo](docs/install.gif)
 
 ## Requirements
 
@@ -63,6 +70,7 @@ Coordinates are device pixels; read the screen size from `/info`.
 | `POST /input` `{type:"key",key:"KEYCODE_BACK"}` | key event |
 | `POST /rotate` | rotate the screen 90 degrees |
 | `GET /screenshot` | save a PNG to ./screenshots (add `?download=1` to download it) |
+| `GET /frame` | one PNG of the current screen, nothing saved |
 | `POST /install` (raw APK body) | install and launch |
 | `GET /video` | raw H.264 Annex-B stream |
 | `GET /stream` | MJPEG fallback |

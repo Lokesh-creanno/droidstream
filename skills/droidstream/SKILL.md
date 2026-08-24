@@ -56,6 +56,7 @@ Coordinates are **device pixels** (get them from `/info`).
 | `POST /input` `{type:"key",key:"KEYCODE_BACK"}` | key event |
 | `POST /rotate` | rotate the screen 90 degrees |
 | `GET /screenshot` | save a PNG to ./screenshots (add `?download=1` to download it) |
+| `GET /frame` | one PNG of the current screen, nothing saved |
 | `POST /install` (raw APK body) | install `-r` and launch |
 | `GET /video` | raw H.264 Annex-B stream |
 | `GET /stream` | MJPEG fallback |

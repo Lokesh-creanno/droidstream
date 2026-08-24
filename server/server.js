@@ -139,6 +139,12 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (url.pathname === '/frame') {
+      if (!await pickDevice()) return json(res, 409, { error: 'no device' });
+      const png = await run(['exec-out', 'screencap', '-p'], { binary: true });
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
+      return res.end(png);
+    }
     if (url.pathname === '/screenshot') {
       if (!await pickDevice()) return json(res, 409, { error: 'no device' });
       const png = await run(['exec-out', 'screencap', '-p'], { binary: true });

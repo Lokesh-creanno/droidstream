@@ -203,8 +203,11 @@ const server = http.createServer(async (req, res) => {
       const avd = (b.avd || '').replace(/[^\w.-]/g, '');
       if (!avd) return json(res, 400, { error: 'avd required' });
       // Warm boot by default: a snapshot start is roughly 3x faster than a cold one.
-      const args = ['-avd', avd, '-netdelay', 'none', '-netspeed', 'full'];
+      const args = ['-avd', avd, '-netdelay', 'none', '-netspeed', 'full', '-no-boot-anim'];
       if (b.cold) args.push('-no-snapshot-load');
+      // Headless is opt-in: many GPUs (Intel/AMD integrated especially) cannot make an offscreen
+      // GL context, so -no-window only works with the software renderer.
+      if (b.headless) args.push('-no-window', '-gpu', 'swiftshader_indirect');
       const child = require('child_process').spawn(EMULATOR, args, { detached: true, stdio: 'ignore' });
       child.unref();
       return json(res, 200, { booting: avd, cold: !!b.cold });

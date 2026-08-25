@@ -116,6 +116,19 @@ Worth setting once on the AVD itself, in Android Studio's Device Manager:
 
 On a tuned Pixel 6 AVD that is roughly **94 s cold versus 33 s warm**.
 
+## When the emulator itself is the problem
+
+- **Tiny emulator window** - the emulator shrinks itself to fit your display. A 1080x2400 AVD on a
+  1280x800 laptop panel has nowhere to go. Minimise the window; droidstream scales the screen to
+  whatever space the page has.
+- **`unauthorized` device, no prompt on screen** — a missing `~/.android/adbkey.pub`.
+  `adb kill-server && adb start-server` regenerates the pair.
+- **Headless (`{"headless":true}`) exits immediately** — integrated GPUs cannot always make an
+  offscreen GL context, so headless boots use the software renderer. Graphics are slower.
+- **Slow boots on Windows** - Memory Integrity (Windows Security -> Device security -> Core
+  isolation) makes the hypervisor the emulator relies on measurably slower, a Balanced power plan
+  throttles the CPU, and Defender scans every write to the multi-gigabyte AVD image.
+
 ## Limits
 
 - Android only. iOS needs macOS (`simctl`) and is not implemented yet.

@@ -88,6 +88,12 @@ normal, not a stall. Under motion expect ~15-25 fps.
 - **A dev build hangs on its splash screen, no error** — the bundler is not reachable. `expo start`
   and `npm run dev` do not create the `adb reverse` tunnel; only `expo run:android` does. Install
   through droidstream (it tunnels the live bundler ports automatically) or `POST /reverse {"ports":[8081]}`.
+- **`adb devices` says `unauthorized` and no dialog appears on the device** — the host key pair is
+  incomplete (a missing `~/.android/adbkey.pub`). `adb kill-server && adb start-server` regenerates it.
+- **`-no-window` starts and then dies** — integrated GPUs often cannot make an offscreen GL context.
+  Headless needs the software renderer, which is what `POST /boot {"headless":true}` passes.
+- **The emulator window is tiny** - a 1080x2400 AVD cannot fit a 1280x800 laptop panel, so the
+  emulator shrinks it. Minimise the window and use droidstream, which scales the screen to the page.
 - **The emulator is painfully slow** — something is cold-booting it. `-no-snapshot-load` (and
   `{cold:true}` on `/boot`) rebuilds the system image every launch; a warm boot is roughly 3x faster.
   On the AVD itself, set Quick Boot, 6 CPU cores and `hw.gpu.mode=host`.
